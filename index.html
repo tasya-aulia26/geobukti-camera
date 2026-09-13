@@ -155,7 +155,7 @@
     </div>
 
     <div class="card">
-      <h2>🚪 Datang atau Pulang?</h2>
+      <h2>🚶 Datang atau Pulang?</h2>
       <p class="hint">Pilih salah satu sebelum ambil foto.</p>
       <div class="seg datang" id="seg-jenis">
         <button data-val="Datang" class="sel"><span class="ico">🟢</span>Datang</button>
@@ -181,7 +181,7 @@
     <div class="card">
       <h2>📍 Lokasi</h2>
       <div class="status warn" id="gps-status"><span class="dot"></span><span id="gps-text">Menunggu…</span></div>
-      <button class="btn secondary" id="btn-gps">🔍 Cari Lokasi Lagi</button>
+      <button class="btn secondary" id="btn-gps">🔄 Cari Lokasi Lagi</button>
     </div>
 
     <button class="btn" id="btn-buka-kamera" disabled>📷 Buka Kamera</button>
@@ -208,7 +208,7 @@
       <div class="logo">✅</div>
       <div>
         <h1>Periksa Foto</h1>
-        <p>Watermark sedang dipasang…</p>
+        <p id="preview-sub">Watermark sedang dipasang…</p>
       </div>
     </div>
     <div class="card">
@@ -216,7 +216,7 @@
       <img id="preview-img" alt="Preview foto" style="display:none;">
     </div>
     <div class="preview-actions">
-      <button class="btn secondary" id="btn-ulang">🔁 Ambil Ulang</button>
+      <button class="btn secondary" id="btn-ulang">🔄 Ambil Ulang</button>
       <button class="btn" id="btn-gunakan">✅ Gunakan</button>
     </div>
     <div class="footer" style="margin-top:14px;">Simpan &amp; bagikan dibuat di Tahap 6–7</div>
@@ -232,7 +232,8 @@ var state = {
   akurasi: null,
   alamat: '',
   fotoDataUrl: null,
-  rawCanvas: null
+  rawCanvas: null,
+  isPortrait: false
 };
 
 var BACKEND = 'https://script.google.com/macros/s/AKfycbwxlmttWUApbVOMFvNHmBcGhmKNwNfdTC4vx99HQuZGRCrMiHdrjSGBDxbvPZgIEKBF/exec';
@@ -427,31 +428,30 @@ function gambarPeta(ctx, mapImg, x, y, size){
   ctx.stroke();
 }
 
-async function gambarWatermark(canvas, ctx, alamat, mapBase64, wkt){
+// Gambar watermark teks dulu (cepat), peta menyusul
+function gambarWatermarkTeks(canvas, ctx, alamat, wkt){
   var W = canvas.width, H = canvas.height;
   var landscape = (W >= H);
+  var S = Math.min(W, H);
 
-  var S = Math.min(W, H);          // sisi pendek, dasar skala
-  var pad = Math.round(S * 0.025);
+  var pad = Math.round(S * 0.03);
   var gap = Math.round(S * 0.02);
 
   var mapSize, fontAddr, fontSmall, lineH;
   if (landscape) {
-    mapSize   = Math.round(S * 0.10);
-    fontAddr  = Math.round(S * 0.032);
-    fontSmall = Math.round(S * 0.026);
-    lineH     = Math.round(S * 0.050);
+    mapSize   = Math.round(S * 0.12);
+    fontAddr  = Math.round(S * 0.040);
+    fontSmall = Math.round(S * 0.032);
+    lineH     = Math.round(S * 0.060);
   } else {
-    mapSize   = Math.round(S * 0.062);
-    fontAddr  = Math.round(S * 0.028);
-    fontSmall = Math.round(S * 0.023);
-    lineH     = Math.round(S * 0.046);
+    mapSize   = Math.round(S * 0.075);
+    fontAddr  = Math.round(S * 0.035);
+    fontSmall = Math.round(S * 0.028);
+    lineH     = Math.round(S * 0.055);
   }
 
   var textH = fontAddr + lineH * 3;
   var barH = Math.max(mapSize, textH) + pad * 2;
-
-  var mapImg = await muatGambar(mapBase64);
 
   var lat = (typeof state.lat === 'number') ? state.lat.toFixed(5) : '--';
   var lng = (typeof state.lng === 'number') ? state.lng.toFixed(5) : '--';
@@ -472,7 +472,15 @@ async function gambarWatermark(canvas, ctx, alamat, mapBase64, wkt){
 
   var mapX = pad;
   var mapY = H - barH + pad;
-  gambarPeta(ctx, mapImg, mapX, mapY, mapSize);
+
+  // placeholder peta (kotak kosong dulu)
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  roundedRect(ctx, mapX, mapY, mapSize, mapSize, mapSize * 0.12);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = Math.max(2, mapSize * 0.03);
+  roundedRect(ctx, mapX, mapY, mapSize, mapSize, mapSize * 0.12);
+  ctx.stroke();
 
   var textX = mapX + mapSize + gap;
   var maxW = W - pad - textX;
@@ -511,6 +519,21 @@ async function gambarWatermark(canvas, ctx, alamat, mapBase64, wkt){
     ctx.fillText(baris2, textX, lineY + lineH*n + Math.round(fontSmall*0.3));
     ctx.fillText(baris3, textX, lineY + lineH*(n+1) + Math.round(fontSmall*0.3));
   }
+
+  return { mapX: mapX, mapY: mapY, mapSize: mapSize, barH: barH, pad: pad };
+}
+
+// Update peta setelah backend merespons
+function updatePeta(canvas, ctx, mapBase64, layout){
+  var mapImg = new Image();
+  mapImg.onload = function(){
+    gambarPeta(ctx, mapImg, layout.mapX, layout.mapY, layout.mapSize);
+    // refresh preview
+    state.fotoDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    $('preview-img').src = state.fotoDataUrl;
+  };
+  mapImg.onerror = function(){ /* biarkan kotak kosong */ };
+  mapImg.src = mapBase64;
 }
 
 // ============ AMBIL FOTO ============
@@ -520,14 +543,13 @@ async function ambilFoto(){
 
   var srcW = video.videoWidth;
   var srcH = video.videoHeight;
-  var isPortrait = (window.innerHeight > window.innerWidth);
+  state.isPortrait = (window.innerHeight > window.innerWidth);
 
   var canvas = document.createElement('canvas');
   var ctx = canvas.getContext('2d');
 
-  if (isPortrait && srcW > srcH) {
-    // Sensor kamera landscape + HP dipegang portrait:
-    // crop bagian tengah frame jadi portrait 9:16 (naikkan ke 1080x1920)
+  if (state.isPortrait && srcW > srcH) {
+    // HP tegak: crop tengah jadi 9:16
     var outW = 1080, outH = 1920;
     var cropW = srcH * 9 / 16;
     var cropH = srcH;
@@ -536,6 +558,7 @@ async function ambilFoto(){
     canvas.height = outH;
     ctx.drawImage(video, sx, 0, cropW, cropH, 0, 0, outW, outH);
   } else {
+    // HP miring: pakai frame penuh
     canvas.width = srcW;
     canvas.height = srcH;
     ctx.drawImage(video, 0, 0, srcW, srcH);
@@ -548,30 +571,40 @@ async function ambilFoto(){
   // tampilkan loading
   $('preview-loading').style.display = 'block';
   $('preview-img').style.display = 'none';
+  $('preview-sub').textContent = 'Watermark sedang dipasang…';
   $('btn-ulang').disabled = true;
   $('btn-gunakan').disabled = true;
 
   var wkt = dapatkanWaktu();
-  var alamat = '', mapBase64 = '';
 
-  try {
-    var resp = await panggilBackend('watermark', { lat: state.lat, lng: state.lng });
-    alamat = (resp && resp.alamat) || '';
-    mapBase64 = (resp && resp.mapBase64) || '';
-    state.alamat = alamat;
-  } catch (e) {
-    alamat = '';
-    mapBase64 = '';
-  }
-
-  await gambarWatermark(canvas, ctx, alamat, mapBase64, wkt);
-
+  // 1. Gambar watermark teks DULU (cepat, tanpa tunggu backend)
+  var layout = gambarWatermarkTeks(canvas, ctx, state.alamat, wkt);
   state.fotoDataUrl = canvas.toDataURL('image/jpeg', 0.92);
   $('preview-img').src = state.fotoDataUrl;
   $('preview-img').style.display = 'block';
   $('preview-loading').style.display = 'none';
   $('btn-ulang').disabled = false;
   $('btn-gunakan').disabled = false;
+  $('preview-sub').textContent = 'Memuat peta…';
+
+  // 2. Ambil alamat + peta dari backend (background)
+  try {
+    var resp = await panggilBackend('watermark', { lat: state.lat, lng: state.lng });
+    if (resp && resp.alamat) {
+      state.alamat = resp.alamat;
+      // redraw teks dengan alamat baru
+      ctx.clearRect(0, canvas.height - layout.barH, canvas.width, layout.barH);
+      layout = gambarWatermarkTeks(canvas, ctx, state.alamat, wkt);
+      state.fotoDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+      $('preview-img').src = state.fotoDataUrl;
+    }
+    if (resp && resp.mapBase64) {
+      updatePeta(canvas, ctx, resp.mapBase64, layout);
+    }
+    $('preview-sub').textContent = 'Selesai';
+  } catch (e) {
+    $('preview-sub').textContent = 'Peta gagal dimuat';
+  }
 }
 
 // ============ EVENT ============
