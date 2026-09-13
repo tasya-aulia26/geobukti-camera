@@ -31,10 +31,7 @@
   .screen{display:none;flex:1;padding:14px 12px 24px;width:100%;}
   .screen.active{display:block;}
 
-  .topbar{
-    display:flex;align-items:center;gap:10px;
-    padding:12px 4px 14px;
-  }
+  .topbar{display:flex;align-items:center;gap:10px;padding:12px 4px 14px;}
   .logo{
     width:44px;height:44px;border-radius:12px;flex:0 0 auto;
     background:linear-gradient(135deg,var(--accent),var(--accent-2));
@@ -45,11 +42,8 @@
   .topbar p{margin:0;font-size:12.5px;color:var(--muted);}
 
   .card{
-    background:var(--card);
-    border:1px solid var(--border);
-    border-radius:var(--radius);
-    padding:16px;
-    margin-bottom:14px;
+    background:var(--card);border:1px solid var(--border);
+    border-radius:var(--radius);padding:16px;margin-bottom:14px;
     box-shadow:0 2px 8px rgba(20,40,30,.04);
   }
   .card h2{font-size:15px;margin:0 0 4px;font-weight:700;}
@@ -77,8 +71,7 @@
 
   .status{
     display:flex;align-items:center;gap:9px;
-    padding:12px;border-radius:12px;font-size:14px;font-weight:600;
-    margin-bottom:12px;
+    padding:12px;border-radius:12px;font-size:14px;font-weight:600;margin-bottom:12px;
   }
   .status.ok{background:#e8f6ee;color:#166534;}
   .status.warn{background:#fef3cd;color:#92400e;}
@@ -99,7 +92,7 @@
 
   .footer{text-align:center;font-size:11.5px;color:var(--muted);padding:10px 0 4px;}
 
-  /* ====== LAYAR KAMERA (full screen) ====== */
+  /* ====== LAYAR KAMERA ====== */
   .screen.camera{padding:0;background:#000;position:relative;height:100vh;overflow:hidden;}
   .screen.camera video{
     width:100%;height:100%;object-fit:cover;display:block;
@@ -122,8 +115,7 @@
   .shutter{
     width:78px;height:78px;border-radius:50%;
     background:#fff;border:5px solid rgba(255,255,255,.35);
-    background-clip:padding-box;
-    cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4);
+    background-clip:padding-box;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4);
   }
   .shutter:active{transform:scale(.92);}
   .cam-close{
@@ -136,8 +128,6 @@
   /* ====== PREVIEW ====== */
   #preview-img{width:100%;border-radius:12px;display:block;background:#e6ebef;}
   .preview-actions{display:flex;gap:10px;margin-top:14px;}
-
-  /* spinner */
   .spinner{
     width:34px;height:34px;border:4px solid rgba(0,0,0,.15);
     border-top-color:var(--accent);border-radius:50%;
@@ -158,14 +148,12 @@
       </div>
     </div>
 
-    <!-- Nama -->
     <div class="card">
       <h2>👤 Nama</h2>
       <p class="hint">Diisi sekali, tersimpan di HP ini (tidak tampil di foto).</p>
       <input type="text" id="nama" placeholder="Ketik nama kamu" autocomplete="name">
     </div>
 
-    <!-- Jenis -->
     <div class="card">
       <h2>🚪 Datang atau Pulang?</h2>
       <p class="hint">Pilih salah satu sebelum ambil foto.</p>
@@ -175,7 +163,6 @@
       </div>
     </div>
 
-    <!-- Waktu -->
     <div class="card">
       <h2>🕐 Waktu</h2>
       <p class="hint">Pilih waktu yang akan tampil di watermark foto.</p>
@@ -191,14 +178,12 @@
       </div>
     </div>
 
-    <!-- Lokasi -->
     <div class="card">
       <h2>📍 Lokasi</h2>
       <div class="status warn" id="gps-status"><span class="dot"></span><span id="gps-text">Menunggu…</span></div>
       <button class="btn secondary" id="btn-gps">📡 Cari Lokasi Lagi</button>
     </div>
 
-    <!-- Tombol kamera -->
     <button class="btn" id="btn-buka-kamera" disabled>📷 Buka Kamera</button>
     <div class="footer">GeoBukti Camera v1</div>
   </div>
@@ -223,17 +208,18 @@
       <div class="logo">✅</div>
       <div>
         <h1>Periksa Foto</h1>
-        <p>Pastikan sudah sesuai</p>
+        <p>Watermark sedang dipasang…</p>
       </div>
     </div>
     <div class="card">
-      <img id="preview-img" alt="Preview foto">
+      <div id="preview-loading"><div class="spinner"></div></div>
+      <img id="preview-img" alt="Preview foto" style="display:none;">
     </div>
     <div class="preview-actions">
       <button class="btn secondary" id="btn-ulang">🔁 Ambil Ulang</button>
       <button class="btn" id="btn-gunakan">✅ Gunakan</button>
     </div>
-    <div class="footer" style="margin-top:14px;">Langkah simpan &amp; bagikan dibuat di Tahap 6–7</div>
+    <div class="footer" style="margin-top:14px;">Simpan &amp; bagikan dibuat di Tahap 6–7</div>
   </div>
 
 <script>
@@ -245,7 +231,8 @@ var state = {
   lng: null,
   akurasi: null,
   alamat: '',
-  fotoDataUrl: null
+  fotoDataUrl: null,
+  rawCanvas: null
 };
 
 var BACKEND = 'https://script.google.com/macros/s/AKfycbwxlmttWUApbVOMFvNHmBcGhmKNwNfdTC4vx99HQuZGRCrMiHdrjSGBDxbvPZgIEKBF/exec';
@@ -314,6 +301,33 @@ function cariLokasi(){
 }
 $('btn-gps').addEventListener('click', cariLokasi);
 
+// ============ WAKTU (untuk watermark) ============
+function pad2(n){ return (n < 10 ? '0' : '') + n; }
+
+function dapatkanWaktu(){
+  var tanggal, jam;
+  if (state.waktu === 'manual') {
+    var td = $('manual-tanggal').value;
+    var tj = $('manual-jam').value;
+    if (td) {
+      var p = td.split('-');
+      tanggal = p[2] + '/' + p[1] + '/' + p[0];
+    } else {
+      tanggal = '--/--/----';
+    }
+    if (tj) {
+      jam = tj.split(':').length === 2 ? tj + ':00' : tj;
+    } else {
+      jam = '--:--:--';
+    }
+  } else {
+    var now = new Date();
+    tanggal = pad2(now.getDate()) + '/' + pad2(now.getMonth()+1) + '/' + now.getFullYear();
+    jam = pad2(now.getHours()) + ':' + pad2(now.getMinutes()) + ':' + pad2(now.getSeconds());
+  }
+  return { tanggal: tanggal, jam: jam };
+}
+
 // ============ KAMERA ============
 function infoKamera(judul, sub){
   $('cam-info').childNodes[0].nodeValue = judul + ' ';
@@ -333,7 +347,6 @@ async function bukaKamera(){
     await video.play();
     infoKamera('📷 Kamera siap', 'Arahkan ke objek, lalu tekan tombol bulat');
   } catch (err) {
-    infoKamera('❌ Kamera gagal', '');
     var pesan = 'Kamera tidak bisa dibuka.';
     if (err.name === 'NotAllowedError') pesan = 'Izin kamera ditolak. Buka izin kamera di pengaturan browser.';
     else if (err.name === 'NotFoundError') pesan = 'Tidak ada kamera di perangkat ini.';
@@ -354,7 +367,154 @@ function stopKamera(){
   if (video) video.srcObject = null;
 }
 
-function ambilFoto(){
+// ============ PANGGIL BACKEND ============
+function panggilBackend(action, obj){
+  var url = BACKEND + '?action=' + action;
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(obj || {})
+  }).then(function(r){ return r.json(); });
+}
+
+function muatGambar(src){
+  return new Promise(function(resolve){
+    if (!src) { resolve(null); return; }
+    var img = new Image();
+    img.onload = function(){ resolve(img); };
+    img.onerror = function(){ resolve(null); };
+    img.src = src;
+  });
+}
+
+// ============ WATERMARK ============
+function roundedRect(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function potongTeks(ctx, text, maxWidth){
+  if (!text) return '';
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  var t = text;
+  while (t.length > 1 && ctx.measureText(t + '…').width > maxWidth) {
+    t = t.slice(0, -1);
+  }
+  return t + '…';
+}
+
+function gambarPeta(ctx, mapImg, x, y, size){
+  var r = size * 0.12;
+  if (!mapImg) {
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    roundedRect(ctx, x, y, size, size, r);
+    ctx.fill();
+  } else {
+    ctx.save();
+    roundedRect(ctx, x, y, size, size, r);
+    ctx.clip();
+    ctx.drawImage(mapImg, x, y, size, size);
+    ctx.restore();
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = Math.max(2, size * 0.03);
+  roundedRect(ctx, x, y, size, size, r);
+  ctx.stroke();
+}
+
+async function gambarWatermark(canvas, ctx, alamat, mapBase64, wkt){
+  var W = canvas.width, H = canvas.height;
+  var landscape = (W >= H);
+
+  var u = Math.min(W, H) / 100;   // unit = 1% sisi pendek
+  var pad = Math.round(u * 1.4);
+  var gap = Math.round(u * 1.1);
+  var mapSize = landscape ? Math.round(u * 9) : Math.round(u * 6);
+  var barH = mapSize + pad * 2;
+
+  var mapImg = await muatGambar(mapBase64);
+
+  // lat/lng/akurasi teks
+  var lat = (typeof state.lat === 'number') ? state.lat.toFixed(5) : '--';
+  var lng = (typeof state.lng === 'number') ? state.lng.toFixed(5) : '--';
+  var akurasi = (state.akurasi != null) ? state.akurasi : '--';
+  var baris1 = (alamat && alamat.trim()) ? ('📍 ' + alamat.trim()) : '📍 Alamat tidak tersedia';
+  var baris2 = '📅 ' + wkt.tanggal + '  ·  ⏰ ' + wkt.jam;
+  var baris3 = '🌐 ' + lat + ', ' + lng + '  ·  ±' + akurasi + ' m';
+
+  // gradient gelap di bawah
+  var grd = ctx.createLinearGradient(0, H - barH, 0, H);
+  grd.addColorStop(0, 'rgba(0,0,0,0)');
+  grd.addColorStop(0.4, 'rgba(0,0,0,0.55)');
+  grd.addColorStop(1, 'rgba(0,0,0,0.78)');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, H - barH, W, barH);
+
+  var font = '-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif';
+  var fontAddr, fontSmall, lineH;
+  if (landscape) {
+    fontAddr = Math.round(u * 1.35);
+    fontSmall = Math.round(u * 1.15);
+    lineH = Math.round(u * 1.8);
+  } else {
+    fontAddr = Math.round(u * 1.25);
+    fontSmall = Math.round(u * 1.05);
+    lineH = Math.round(u * 1.7);
+  }
+
+  var mapX = pad;
+  var mapY = H - barH + pad;
+  gambarPeta(ctx, mapImg, mapX, mapY, mapSize);
+
+  var textX = mapX + mapSize + gap;
+  var textRight = W - pad;
+  var maxW = textRight - textX;
+
+  // baris 1 (alamat) — bold
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '600 ' + fontAddr + 'px ' + font;
+  ctx.textBaseline = 'alphabetic';
+
+  if (landscape) {
+    var a1 = potongTeks(ctx, baris1, maxW);
+    ctx.fillText(a1, textX, H - barH + pad + fontAddr + Math.round(u*0.4));
+    ctx.fillStyle = '#e6e6e6';
+    ctx.font = '400 ' + fontSmall + 'px ' + font;
+    ctx.fillText(baris2, textX, H - barH + pad + fontAddr + Math.round(u*0.4) + lineH);
+    ctx.fillText(baris3, textX, H - barH + pad + fontAddr + Math.round(u*0.4) + lineH*2);
+  } else {
+    // portrait: alamat boleh 2 baris
+    var words = baris1.split(' ');
+    var line = '', lineNo = 0;
+    var startY = H - barH + pad + fontAddr;
+    for (var i = 0; i < words.length; i++) {
+      var test = line ? line + ' ' + words[i] : words[i];
+      if (ctx.measureText(test).width > maxW && line) {
+        ctx.fillText(line, textX, startY + lineH * lineNo);
+        lineNo++;
+        line = words[i];
+        if (lineNo >= 2) break;
+      } else {
+        line = test;
+      }
+    }
+    if (lineNo < 2 && line) { ctx.fillText(line, textX, startY + lineH * lineNo); lineNo++; }
+
+    ctx.fillStyle = '#e6e6e6';
+    ctx.font = '400 ' + fontSmall + 'px ' + font;
+    ctx.fillText(baris2, textX, startY + lineH * lineNo + Math.round(u*0.3));
+    lineNo++;
+    ctx.fillText(baris3, textX, startY + lineH * lineNo + Math.round(u*0.3));
+  }
+}
+
+// ============ AMBIL FOTO ============
+async function ambilFoto(){
   var video = $('video');
   if (!video.videoWidth) return;
 
@@ -363,16 +523,41 @@ function ambilFoto(){
   canvas.height = video.videoHeight;
   var ctx = canvas.getContext('2d');
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  state.rawCanvas = canvas;
+
+  stopKamera();
+  showScreen('screen-preview');
+
+  // tampilkan loading
+  $('preview-loading').style.display = 'block';
+  $('preview-img').style.display = 'none';
+  $('btn-ulang').disabled = true;
+  $('btn-gunakan').disabled = true;
+
+  var wkt = dapatkanWaktu();
+  var alamat = '', mapBase64 = '';
+
+  try {
+    var resp = await panggilBackend('watermark', { lat: state.lat, lng: state.lng });
+    alamat = (resp && resp.alamat) || '';
+    mapBase64 = (resp && resp.mapBase64) || '';
+    state.alamat = alamat;
+  } catch (e) {
+    alamat = '';
+    mapBase64 = '';
+  }
+
+  await gambarWatermark(canvas, ctx, alamat, mapBase64, wkt);
 
   state.fotoDataUrl = canvas.toDataURL('image/jpeg', 0.92);
-  stopKamera();
-
-  var img = $('preview-img');
-  img.src = state.fotoDataUrl;
-  showScreen('screen-preview');
+  $('preview-img').src = state.fotoDataUrl;
+  $('preview-img').style.display = 'block';
+  $('preview-loading').style.display = 'none';
+  $('btn-ulang').disabled = false;
+  $('btn-gunakan').disabled = false;
 }
 
-// ============ EVENT KAMERA ============
+// ============ EVENT ============
 $('btn-buka-kamera').addEventListener('click', bukaKamera);
 $('btn-tutup-kamera').addEventListener('click', function(){
   stopKamera();
@@ -380,16 +565,16 @@ $('btn-tutup-kamera').addEventListener('click', function(){
 });
 $('btn-ambil').addEventListener('click', ambilFoto);
 
-// ============ PREVIEW ============
 $('btn-ulang').addEventListener('click', function(){
   $('preview-img').src = '';
+  state.fotoDataUrl = null;
   bukaKamera();
 });
 $('btn-gunakan').addEventListener('click', function(){
-  alert('✅ Foto sudah dipilih.\n\nSimpan + watermark dibuat di Tahap 5–6.');
+  alert('✅ Foto + watermark sudah jadi.\n\nSimpan ke Drive & Sheets dibuat di Tahap 6.');
 });
 
-// mulai: langsung cari lokasi
+// mulai
 cariLokasi();
 </script>
 </body>
