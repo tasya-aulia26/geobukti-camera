@@ -63,9 +63,7 @@
   }
   input:focus{outline:none;border-color:var(--accent);}
 
-  .seg{
-    display:flex;gap:10px;margin-bottom:12px;
-  }
+  .seg{display:flex;gap:10px;margin-bottom:12px;}
   .seg button{
     flex:1;padding:16px 10px;font-size:16px;font-weight:700;
     border:2px solid var(--border);border-radius:14px;
@@ -99,15 +97,58 @@
   .btn.danger{background:var(--danger);box-shadow:0 4px 12px rgba(214,69,69,.25);}
   .btn:disabled{opacity:.55;cursor:not-allowed;}
 
-  .footer{
-    text-align:center;font-size:11.5px;color:var(--muted);
-    padding:10px 0 4px;
+  .footer{text-align:center;font-size:11.5px;color:var(--muted);padding:10px 0 4px;}
+
+  /* ====== LAYAR KAMERA (full screen) ====== */
+  .screen.camera{padding:0;background:#000;position:relative;height:100vh;overflow:hidden;}
+  .screen.camera video{
+    width:100%;height:100%;object-fit:cover;display:block;
+    position:absolute;top:0;left:0;
   }
+  .camera-top{
+    position:absolute;top:0;left:0;right:0;z-index:5;
+    padding:14px 12px;
+    background:linear-gradient(to bottom,rgba(0,0,0,.6),rgba(0,0,0,0));
+    color:#fff;display:flex;align-items:center;justify-content:space-between;
+  }
+  .camera-top .info{font-size:14px;font-weight:600;text-shadow:0 1px 3px rgba(0,0,0,.5);}
+  .camera-top .info .lbl2{font-size:11px;font-weight:400;opacity:.85;display:block;}
+  .camera-bottom{
+    position:absolute;bottom:0;left:0;right:0;z-index:5;
+    padding:18px 16px 28px;
+    background:linear-gradient(to top,rgba(0,0,0,.7),rgba(0,0,0,0));
+    display:flex;align-items:center;justify-content:center;gap:22px;
+  }
+  .shutter{
+    width:78px;height:78px;border-radius:50%;
+    background:#fff;border:5px solid rgba(255,255,255,.35);
+    background-clip:padding-box;
+    cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4);
+  }
+  .shutter:active{transform:scale(.92);}
+  .cam-close{
+    width:52px;height:52px;border-radius:50%;
+    background:rgba(0,0,0,.45);border:2px solid rgba(255,255,255,.7);
+    color:#fff;font-size:22px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+  }
+
+  /* ====== PREVIEW ====== */
+  #preview-img{width:100%;border-radius:12px;display:block;background:#e6ebef;}
+  .preview-actions{display:flex;gap:10px;margin-top:14px;}
+
+  /* spinner */
+  .spinner{
+    width:34px;height:34px;border:4px solid rgba(0,0,0,.15);
+    border-top-color:var(--accent);border-radius:50%;
+    animation:spin .8s linear infinite;margin:20px auto;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
 </style>
 </head>
 <body>
 
-  <!-- ============ LAYAR KAMERA (utama) ============ -->
+  <!-- ============ LAYAR UTAMA ============ -->
   <div class="screen active" id="screen-main">
     <div class="topbar">
       <div class="logo">📷</div>
@@ -154,12 +195,26 @@
     <div class="card">
       <h2>📍 Lokasi</h2>
       <div class="status warn" id="gps-status"><span class="dot"></span><span id="gps-text">Menunggu…</span></div>
-      <button class="btn secondary" id="btn-gps">🔁 Cari Lokasi Lagi</button>
+      <button class="btn secondary" id="btn-gps">📡 Cari Lokasi Lagi</button>
     </div>
 
     <!-- Tombol kamera -->
     <button class="btn" id="btn-buka-kamera" disabled>📷 Buka Kamera</button>
     <div class="footer">GeoBukti Camera v1</div>
+  </div>
+
+  <!-- ============ LAYAR KAMERA ============ -->
+  <div class="screen camera" id="screen-camera">
+    <video id="video" autoplay playsinline muted></video>
+    <div class="camera-top">
+      <div class="info" id="cam-info">Menyiapkan kamera…<span class="lbl2" id="cam-sub"></span></div>
+      <button class="cam-close" id="btn-tutup-kamera" aria-label="Tutup">✕</button>
+    </div>
+    <div class="camera-bottom">
+      <div style="width:52px;"></div>
+      <button class="shutter" id="btn-ambil" aria-label="Ambil foto"></button>
+      <div style="width:52px;"></div>
+    </div>
   </div>
 
   <!-- ============ LAYAR PREVIEW ============ -->
@@ -172,13 +227,13 @@
       </div>
     </div>
     <div class="card">
-      <img id="preview-img" alt="Preview foto" style="width:100%;border-radius:12px;display:block;">
+      <img id="preview-img" alt="Preview foto">
     </div>
-    <div style="display:flex;gap:10px;">
+    <div class="preview-actions">
       <button class="btn secondary" id="btn-ulang">🔁 Ambil Ulang</button>
       <button class="btn" id="btn-gunakan">✅ Gunakan</button>
     </div>
-    <div class="footer" style="margin-top:14px;">Foto akan disimpan + bisa dibagikan ke WhatsApp</div>
+    <div class="footer" style="margin-top:14px;">Langkah simpan &amp; bagikan dibuat di Tahap 6–7</div>
   </div>
 
 <script>
@@ -195,9 +250,10 @@ var state = {
 
 var BACKEND = 'https://script.google.com/macros/s/AKfycbwxlmttWUApbVOMFvNHmBcGhmKNwNfdTC4vx99HQuZGRCrMiHdrjSGBDxbvPZgIEKBF/exec';
 
+var stream = null;
+
 function $(id){ return document.getElementById(id); }
 
-// ============ NAVIGASI LAYAR ============
 function showScreen(id){
   var scrs = document.querySelectorAll('.screen');
   for (var i=0;i<scrs.length;i++) scrs[i].classList.remove('active');
@@ -205,14 +261,14 @@ function showScreen(id){
   window.scrollTo(0,0);
 }
 
-// ============ NAMA (localStorage) ============
+// ============ NAMA ============
 var namaInput = $('nama');
 namaInput.value = localStorage.getItem('geobukti_nama') || '';
 namaInput.addEventListener('change', function(){
   localStorage.setItem('geobukti_nama', namaInput.value.trim());
 });
 
-// ============ PILIH JENIS ============
+// ============ JENIS ============
 $('seg-jenis').addEventListener('click', function(e){
   var b = e.target.closest('button');
   if(!b) return;
@@ -221,7 +277,7 @@ $('seg-jenis').addEventListener('click', function(e){
   for (var i=0;i<btns.length;i++) btns[i].classList.toggle('sel', btns[i]===b);
 });
 
-// ============ PILIH WAKTU ============
+// ============ WAKTU ============
 $('seg-waktu').addEventListener('click', function(e){
   var b = e.target.closest('button');
   if(!b) return;
@@ -256,12 +312,81 @@ function cariLokasi(){
     else t.textContent = '❌ Gagal dapat lokasi (kode ' + err.code + ').';
   }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
 }
-
 $('btn-gps').addEventListener('click', cariLokasi);
 
-// ============ BUKA KAMERA (placeholder Tahap 3) ============
-$('btn-buka-kamera').addEventListener('click', function(){
-  alert('📷 Kamera dibuat di Tahap 4.\n\nLokasi & waktu sudah berhasil dikumpulkan. ✅');
+// ============ KAMERA ============
+function infoKamera(judul, sub){
+  $('cam-info').childNodes[0].nodeValue = judul + ' ';
+  $('cam-sub').textContent = sub || '';
+}
+
+async function bukaKamera(){
+  showScreen('screen-camera');
+  infoKamera('Menyiapkan kamera…', '');
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false
+    });
+    var video = $('video');
+    video.srcObject = stream;
+    await video.play();
+    infoKamera('📷 Kamera siap', 'Arahkan ke objek, lalu tekan tombol bulat');
+  } catch (err) {
+    infoKamera('❌ Kamera gagal', '');
+    var pesan = 'Kamera tidak bisa dibuka.';
+    if (err.name === 'NotAllowedError') pesan = 'Izin kamera ditolak. Buka izin kamera di pengaturan browser.';
+    else if (err.name === 'NotFoundError') pesan = 'Tidak ada kamera di perangkat ini.';
+    else if (err.name === 'NotReadableError') pesan = 'Kamera sedang dipakai aplikasi lain.';
+    else if (err.name === 'NotSupportedError') pesan = 'Browser tidak mendukung kamera. Pakai Chrome/Safari terbaru.';
+    alert(pesan);
+    stopKamera();
+    showScreen('screen-main');
+  }
+}
+
+function stopKamera(){
+  if (stream) {
+    stream.getTracks().forEach(function(t){ t.stop(); });
+    stream = null;
+  }
+  var video = $('video');
+  if (video) video.srcObject = null;
+}
+
+function ambilFoto(){
+  var video = $('video');
+  if (!video.videoWidth) return;
+
+  var canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  var ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  state.fotoDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+  stopKamera();
+
+  var img = $('preview-img');
+  img.src = state.fotoDataUrl;
+  showScreen('screen-preview');
+}
+
+// ============ EVENT KAMERA ============
+$('btn-buka-kamera').addEventListener('click', bukaKamera);
+$('btn-tutup-kamera').addEventListener('click', function(){
+  stopKamera();
+  showScreen('screen-main');
+});
+$('btn-ambil').addEventListener('click', ambilFoto);
+
+// ============ PREVIEW ============
+$('btn-ulang').addEventListener('click', function(){
+  $('preview-img').src = '';
+  bukaKamera();
+});
+$('btn-gunakan').addEventListener('click', function(){
+  alert('✅ Foto sudah dipilih.\n\nSimpan + watermark dibuat di Tahap 5–6.');
 });
 
 // mulai: langsung cari lokasi
