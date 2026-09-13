@@ -164,7 +164,7 @@
     </div>
 
     <div class="card">
-      <h2>🕐 Waktu</h2>
+      <h2>⏰ Waktu</h2>
       <p class="hint">Pilih waktu yang akan tampil di watermark foto.</p>
       <div class="seg" id="seg-waktu">
         <button data-val="sekarang" class="sel"><span class="ico">⏱️</span>Sekarang</button>
@@ -181,7 +181,7 @@
     <div class="card">
       <h2>📍 Lokasi</h2>
       <div class="status warn" id="gps-status"><span class="dot"></span><span id="gps-text">Menunggu…</span></div>
-      <button class="btn secondary" id="btn-gps">📡 Cari Lokasi Lagi</button>
+      <button class="btn secondary" id="btn-gps">🔍 Cari Lokasi Lagi</button>
     </div>
 
     <button class="btn" id="btn-buka-kamera" disabled>📷 Buka Kamera</button>
@@ -431,15 +431,28 @@ async function gambarWatermark(canvas, ctx, alamat, mapBase64, wkt){
   var W = canvas.width, H = canvas.height;
   var landscape = (W >= H);
 
-  var u = Math.min(W, H) / 100;   // unit = 1% sisi pendek
-  var pad = Math.round(u * 1.4);
-  var gap = Math.round(u * 1.1);
-  var mapSize = landscape ? Math.round(u * 9) : Math.round(u * 6);
-  var barH = mapSize + pad * 2;
+  var S = Math.min(W, H);          // sisi pendek, dasar skala
+  var pad = Math.round(S * 0.025);
+  var gap = Math.round(S * 0.02);
+
+  var mapSize, fontAddr, fontSmall, lineH;
+  if (landscape) {
+    mapSize   = Math.round(S * 0.10);
+    fontAddr  = Math.round(S * 0.032);
+    fontSmall = Math.round(S * 0.026);
+    lineH     = Math.round(S * 0.050);
+  } else {
+    mapSize   = Math.round(S * 0.062);
+    fontAddr  = Math.round(S * 0.028);
+    fontSmall = Math.round(S * 0.023);
+    lineH     = Math.round(S * 0.046);
+  }
+
+  var textH = fontAddr + lineH * 3;
+  var barH = Math.max(mapSize, textH) + pad * 2;
 
   var mapImg = await muatGambar(mapBase64);
 
-  // lat/lng/akurasi teks
   var lat = (typeof state.lat === 'number') ? state.lat.toFixed(5) : '--';
   var lng = (typeof state.lng === 'number') ? state.lng.toFixed(5) : '--';
   var akurasi = (state.akurasi != null) ? state.akurasi : '--';
@@ -450,66 +463,53 @@ async function gambarWatermark(canvas, ctx, alamat, mapBase64, wkt){
   // gradient gelap di bawah
   var grd = ctx.createLinearGradient(0, H - barH, 0, H);
   grd.addColorStop(0, 'rgba(0,0,0,0)');
-  grd.addColorStop(0.4, 'rgba(0,0,0,0.55)');
-  grd.addColorStop(1, 'rgba(0,0,0,0.78)');
+  grd.addColorStop(0.35, 'rgba(0,0,0,0.55)');
+  grd.addColorStop(1, 'rgba(0,0,0,0.80)');
   ctx.fillStyle = grd;
   ctx.fillRect(0, H - barH, W, barH);
 
   var font = '-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif';
-  var fontAddr, fontSmall, lineH;
-  if (landscape) {
-    fontAddr = Math.round(u * 1.35);
-    fontSmall = Math.round(u * 1.15);
-    lineH = Math.round(u * 1.8);
-  } else {
-    fontAddr = Math.round(u * 1.25);
-    fontSmall = Math.round(u * 1.05);
-    lineH = Math.round(u * 1.7);
-  }
 
   var mapX = pad;
   var mapY = H - barH + pad;
   gambarPeta(ctx, mapImg, mapX, mapY, mapSize);
 
   var textX = mapX + mapSize + gap;
-  var textRight = W - pad;
-  var maxW = textRight - textX;
+  var maxW = W - pad - textX;
 
-  // baris 1 (alamat) — bold
+  ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = '#ffffff';
   ctx.font = '600 ' + fontAddr + 'px ' + font;
-  ctx.textBaseline = 'alphabetic';
+
+  var lineY = H - barH + pad + fontAddr + Math.round(fontAddr * 0.25);
 
   if (landscape) {
-    var a1 = potongTeks(ctx, baris1, maxW);
-    ctx.fillText(a1, textX, H - barH + pad + fontAddr + Math.round(u*0.4));
+    ctx.fillText(potongTeks(ctx, baris1, maxW), textX, lineY);
     ctx.fillStyle = '#e6e6e6';
     ctx.font = '400 ' + fontSmall + 'px ' + font;
-    ctx.fillText(baris2, textX, H - barH + pad + fontAddr + Math.round(u*0.4) + lineH);
-    ctx.fillText(baris3, textX, H - barH + pad + fontAddr + Math.round(u*0.4) + lineH*2);
+    ctx.fillText(baris2, textX, lineY + lineH);
+    ctx.fillText(baris3, textX, lineY + lineH*2);
   } else {
-    // portrait: alamat boleh 2 baris
+    // portrait: alamat wrap maks 2 baris
     var words = baris1.split(' ');
-    var line = '', lineNo = 0;
-    var startY = H - barH + pad + fontAddr;
+    var line = '', n = 0;
     for (var i = 0; i < words.length; i++) {
       var test = line ? line + ' ' + words[i] : words[i];
       if (ctx.measureText(test).width > maxW && line) {
-        ctx.fillText(line, textX, startY + lineH * lineNo);
-        lineNo++;
+        ctx.fillText(line, textX, lineY + lineH*n);
+        n++;
         line = words[i];
-        if (lineNo >= 2) break;
+        if (n >= 2) break;
       } else {
         line = test;
       }
     }
-    if (lineNo < 2 && line) { ctx.fillText(line, textX, startY + lineH * lineNo); lineNo++; }
+    if (n < 2 && line) { ctx.fillText(line, textX, lineY + lineH*n); n++; }
 
     ctx.fillStyle = '#e6e6e6';
     ctx.font = '400 ' + fontSmall + 'px ' + font;
-    ctx.fillText(baris2, textX, startY + lineH * lineNo + Math.round(u*0.3));
-    lineNo++;
-    ctx.fillText(baris3, textX, startY + lineH * lineNo + Math.round(u*0.3));
+    ctx.fillText(baris2, textX, lineY + lineH*n + Math.round(fontSmall*0.3));
+    ctx.fillText(baris3, textX, lineY + lineH*(n+1) + Math.round(fontSmall*0.3));
   }
 }
 
@@ -518,11 +518,28 @@ async function ambilFoto(){
   var video = $('video');
   if (!video.videoWidth) return;
 
+  var srcW = video.videoWidth;
+  var srcH = video.videoHeight;
+  var isPortrait = (window.innerHeight > window.innerWidth);
+
   var canvas = document.createElement('canvas');
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
   var ctx = canvas.getContext('2d');
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  if (isPortrait && srcW > srcH) {
+    // Sensor kamera landscape + HP dipegang portrait:
+    // crop bagian tengah frame jadi portrait 9:16 (naikkan ke 1080x1920)
+    var outW = 1080, outH = 1920;
+    var cropW = srcH * 9 / 16;
+    var cropH = srcH;
+    var sx = (srcW - cropW) / 2;
+    canvas.width = outW;
+    canvas.height = outH;
+    ctx.drawImage(video, sx, 0, cropW, cropH, 0, 0, outW, outH);
+  } else {
+    canvas.width = srcW;
+    canvas.height = srcH;
+    ctx.drawImage(video, 0, 0, srcW, srcH);
+  }
   state.rawCanvas = canvas;
 
   stopKamera();
