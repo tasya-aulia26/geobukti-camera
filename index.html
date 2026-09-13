@@ -141,7 +141,7 @@
   <!-- ============ LAYAR UTAMA ============ -->
   <div class="screen active" id="screen-main">
     <div class="topbar">
-      <div class="logo">��</div>
+      <div class="logo">📷</div>
       <div>
         <h1>GeoBukti Camera</h1>
         <p>Bukti foto + lokasi</p>
@@ -149,17 +149,17 @@
     </div>
 
     <div class="card">
-      <h2>�� Nama</h2>
+      <h2>👤 Nama</h2>
       <p class="hint">Diisi sekali, tersimpan di HP ini (tidak tampil di foto).</p>
       <input type="text" id="nama" placeholder="Ketik nama kamu" autocomplete="name">
     </div>
 
     <div class="card">
-      <h2>�� Datang atau Pulang?</h2>
+      <h2>⭐ Datang atau Pulang?</h2>
       <p class="hint">Pilih salah satu sebelum ambil foto.</p>
       <div class="seg datang" id="seg-jenis">
-        <button data-val="Datang" class="sel"><span class="ico">��</span>Datang</button>
-        <button data-val="Pulang"><span class="ico">��</span>Pulang</button>
+        <button data-val="Datang" class="sel"><span class="ico">🛣️</span>Datang</button>
+        <button data-val="Pulang"><span class="ico">🏠</span>Pulang</button>
       </div>
     </div>
 
@@ -179,12 +179,12 @@
     </div>
 
     <div class="card">
-      <h2>�� Lokasi</h2>
+      <h2>📍 Lokasi</h2>
       <div class="status warn" id="gps-status"><span class="dot"></span><span id="gps-text">Menunggu…</span></div>
-      <button class="btn secondary" id="btn-gps">�� Cari Lokasi Lagi</button>
+      <button class="btn secondary" id="btn-gps">🔄 Cari Lokasi Lagi</button>
     </div>
 
-    <button class="btn" id="btn-buka-kamera" disabled>�� Buka Kamera</button>
+    <button class="btn" id="btn-buka-kamera" disabled>📸 Buka Kamera</button>
     <div class="footer">GeoBukti Camera v1</div>
   </div>
 
@@ -216,7 +216,7 @@
       <img id="preview-img" alt="Preview foto" style="display:none;">
     </div>
     <div class="preview-actions">
-      <button class="btn secondary" id="btn-ulang">�� Ambil Ulang</button>
+      <button class="btn secondary" id="btn-ulang">↩️ Ambil Ulang</button>
       <button class="btn" id="btn-gunakan">✅ Gunakan</button>
     </div>
     <div class="footer" style="margin-top:14px;">Simpan &amp; bagikan dibuat di Tahap 6–7</div>
@@ -278,7 +278,7 @@ $('seg-waktu').addEventListener('click', function(e){
 // ============ GPS ============
 function cariLokasi(){
   var s = $('gps-status'), t = $('gps-text');
-  s.className = 'status warn'; t.textContent = '�� Mencari lokasi…';
+  s.className = 'status warn'; t.textContent = '🛰️ Mencari lokasi…';
   $('btn-buka-kamera').disabled = true;
 
   if (!('geolocation' in navigator)) {
@@ -290,7 +290,7 @@ function cariLokasi(){
     state.lng = pos.coords.longitude;
     state.akurasi = Math.round(pos.coords.accuracy);
     s.className = 'status ok';
-    t.textContent = '�� Lokasi ditemukan (akurasi ±' + state.akurasi + ' m)';
+    t.textContent = '📍 Lokasi ditemukan (akurasi ±' + state.akurasi + ' m)';
     $('btn-buka-kamera').disabled = false;
   }, function(err){
     s.className = 'status err';
@@ -346,7 +346,7 @@ async function bukaKamera(){
     var video = $('video');
     video.srcObject = stream;
     await video.play();
-    infoKamera('�� Kamera siap', 'Arahkan ke objek, lalu tekan tombol bulat');
+    infoKamera('✅ Kamera siap', 'Arahkan ke objek, lalu tekan tombol bulat');
   } catch (err) {
     var pesan = 'Kamera tidak bisa dibuka.';
     if (err.name === 'NotAllowedError') pesan = 'Izin kamera ditolak. Buka izin kamera di pengaturan browser.';
@@ -457,9 +457,9 @@ function gambarWatermarkTeks(canvas, ctx, alamat, wkt){
   var lat = (typeof state.lat === 'number') ? state.lat.toFixed(5) : '--';
   var lng = (typeof state.lng === 'number') ? state.lng.toFixed(5) : '--';
   var akurasi = (state.akurasi != null) ? state.akurasi : '--';
-  var baris1 = (alamat && alamat.trim()) ? ('�� ' + alamat.trim()) : '�� Alamat tidak tersedia';
-  var baris2 = '�� ' + wkt.tanggal + '  ·  ⏰ ' + wkt.jam;
-  var baris3 = '�� ' + lat + ', ' + lng + '  ·  ±' + akurasi + ' m';
+  var baris1 = (alamat && alamat.trim()) ? ('📍 ' + alamat.trim()) : '📍 Alamat tidak tersedia';
+  var baris2 = '📅 ' + wkt.tanggal + '  ·  ⏰ ' + wkt.jam;
+  var baris3 = '📍 ' + lat + ', ' + lng + '  ·  ±' + akurasi + ' m';
 
   // gradient gelap di bawah — SELALU di bawah, bukan di kanan
   var grd = ctx.createLinearGradient(0, H - barH, 0, H);
