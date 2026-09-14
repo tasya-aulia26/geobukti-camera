@@ -201,7 +201,7 @@
     </div>
 
     <button class="btn" id="btn-buka-kamera" disabled> Buka Kamera</button>
-    <div class="footer">GeoBukti Camera v18</div>
+    <div class="footer">GeoBukti Camera v19</div>
   </div>
 
   <!-- ============ LAYAR KAMERA ============ -->
@@ -626,7 +626,7 @@ function renderWatermark(canvas){
   if (state.mapTile) {
     gambarPetaDariTile(ctx, state.mapTile.img, state.mapTile.fx, state.mapTile.fy, layout.mapX, layout.mapY, layout.mapSize);
   }
-  state.fotoDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+  state.fotoDataUrl = canvas.toDataURL('image/jpeg', 0.85);
   $('preview-img').src = state.fotoDataUrl;
 }
 
@@ -707,6 +707,19 @@ async function ambilFoto(){
     }
   }
 
+  // Kecilkan foto kalau terlalu besar (hemat kuota + cepat upload, maks 1280px)
+  var maksSisi = 1280;
+  var sisiPanjang = Math.max(canvas.width, canvas.height);
+  if (sisiPanjang > maksSisi) {
+    var skala = maksSisi / sisiPanjang;
+    var kecil = document.createElement('canvas');
+    kecil.width = Math.round(canvas.width * skala);
+    kecil.height = Math.round(canvas.height * skala);
+    kecil.getContext('2d').drawImage(canvas, 0, 0, kecil.width, kecil.height);
+    canvas = kecil;
+    ctx = canvas.getContext('2d');
+  }
+
   // simpan frame asli (tanpa watermark) untuk redraw bersih
   var rawCanvas = document.createElement('canvas');
   rawCanvas.width = canvas.width;
@@ -728,7 +741,7 @@ async function ambilFoto(){
 
   // debug: tampilkan dimensi & orientasi yang terdeteksi + versi
   var orientasiTeks = landscape ? 'LANDSCAPE' : 'PORTRAIT';
-  $('preview-sub').textContent = 'v18 · pilih ' + state.orientasiManual + ' · ' + orientasiTeks + ' · (terbalik? tekan Putar)';
+  $('preview-sub').textContent = 'v19 · pilih ' + state.orientasiManual + ' · ' + orientasiTeks + ' · (terbalik? tekan Putar)';
 
   // 1. TUNGGU alamat + peta dari backend dulu (maks 10 detik)
   var resp = null;
@@ -821,7 +834,11 @@ async function simpanFoto(){
     }
   } catch(e) {
     $('preview-sub').textContent = '❌ Gagal menyimpan';
-    alert('❌ Gagal menyimpan: ' + e.message + '\n\nCoba lagi ya.');
+    var pesan = e.message || '';
+    if (pesan.indexOf('JSON') !== -1 || pesan.indexOf('DOCTYPE') !== -1 || pesan.indexOf('<') !== -1) {
+      pesan = 'Backend tidak merespons dengan benar. Kemungkinan: (1) backend belum di-update/re-deploy, atau (2) koneksi terputus.';
+    }
+    alert('❌ Gagal menyimpan.\n\n' + pesan);
     btn.disabled = false;
     btn.textContent = '✅ Gunakan';
   }
