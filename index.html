@@ -201,7 +201,7 @@
     </div>
 
     <button class="btn" id="btn-buka-kamera" disabled> Buka Kamera</button>
-    <div class="footer">GeoBukti Camera v16</div>
+    <div class="footer">GeoBukti Camera v17</div>
   </div>
 
   <!-- ============ LAYAR KAMERA ============ -->
@@ -240,7 +240,7 @@
       <button class="btn" id="btn-gunakan">✅ Gunakan</button>
     </div>
     <button class="btn secondary" id="btn-putar" style="margin-top:10px;">↻ Putar Foto 90°</button>
-    <div class="footer" style="margin-top:14px;">Simpan &amp; bagikan dibuat di Tahap 6–7</div>
+    <div class="footer" style="margin-top:14px;">Bagikan ke WA dibuat di Tahap 7</div>
   </div>
 
 <script>
@@ -735,9 +735,55 @@ $('btn-ulang').addEventListener('click', function(){
   bukaKamera();
 });
 $('btn-putar').addEventListener('click', putarFoto);
-$('btn-gunakan').addEventListener('click', function(){
-  alert('✅ Foto + watermark sudah jadi.\n\nSimpan ke Drive & Sheets dibuat di Tahap 6.');
-});
+$('btn-gunakan').addEventListener('click', simpanFoto);
+
+// ============ SIMPAN FOTO (Tahap 6) ============
+async function simpanFoto(){
+  if (!state.fotoDataUrl) return;
+  var btn = $('btn-gunakan');
+  btn.disabled = true;
+  btn.textContent = '⏳ Menyimpan…';
+  $('preview-sub').textContent = 'Menyimpan ke Drive & Sheets…';
+
+  var nama = (namaInput.value || '').trim();
+  var wkt = state.wkt || dapatkanWaktu();
+  var base64 = state.fotoDataUrl.split(',')[1];  // buang prefix "data:image/jpeg;base64,"
+
+  try {
+    var resp = await panggilBackend('simpan', {
+      fotoBase64: base64,
+      tanggal: wkt.tanggal,
+      jam: wkt.jam,
+      jenis: state.jenis,
+      nama: nama,
+      lat: state.lat,
+      lng: state.lng,
+      alamat: state.alamat,
+      akurasi: state.akurasi,
+      sumberWaktu: (state.waktu === 'manual') ? 'Manual' : 'Otomatis'
+    });
+    if (resp && resp.ok) {
+      $('preview-sub').textContent = '✅ Tersimpan!';
+      alert('✅ Foto berhasil disimpan!\n\n• Foto masuk ke Drive\n• Data tercatat di Google Sheets');
+      // bersihkan & kembali ke layar utama
+      $('preview-img').src = '';
+      state.fotoDataUrl = null;
+      state.rawCanvas = null;
+      state.mapBase64 = null;
+      state.wkt = null;
+      showScreen('screen-main');
+      btn.disabled = false;
+      btn.textContent = '✅ Gunakan';
+    } else {
+      throw new Error((resp && resp.pesan) ? resp.pesan : 'Gagal menyimpan');
+    }
+  } catch(e) {
+    $('preview-sub').textContent = '❌ Gagal menyimpan';
+    alert('❌ Gagal menyimpan: ' + e.message + '\n\nCoba lagi ya.');
+    btn.disabled = false;
+    btn.textContent = '✅ Gunakan';
+  }
+}
 
 // mulai
 cariLokasi();
