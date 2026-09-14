@@ -115,6 +115,16 @@
     background:linear-gradient(to top,rgba(0,0,0,.7),rgba(0,0,0,0));
     display:flex;align-items:center;justify-content:center;gap:22px;
   }
+  .camera-orientasi{
+    position:absolute;bottom:110px;left:0;right:0;z-index:6;
+    display:flex;justify-content:center;gap:10px;padding:0 16px;
+  }
+  .ori-btn{
+    padding:10px 20px;font-size:15px;font-weight:700;border-radius:20px;
+    border:2px solid rgba(255,255,255,.5);background:rgba(0,0,0,.5);color:#fff;
+    cursor:pointer;
+  }
+  .ori-btn.sel{border-color:#fff;background:rgba(255,255,255,.25);}
   .shutter{
     width:78px;height:78px;border-radius:50%;
     background:#fff;border:5px solid rgba(255,255,255,.35);
@@ -188,7 +198,7 @@
     </div>
 
     <button class="btn" id="btn-buka-kamera" disabled> Buka Kamera</button>
-    <div class="footer">GeoBukti Camera v12</div>
+    <div class="footer">GeoBukti Camera v13</div>
   </div>
 
   <!-- ============ LAYAR KAMERA ============ -->
@@ -203,7 +213,11 @@
       <button class="shutter" id="btn-ambil" aria-label="Ambil foto"></button>
       <div style="width:52px;"></div>
     </div>
-  </div>
+    <div class="camera-orientasi" id="camera-orientasi">
+      <button class="ori-btn sel" data-ori="portrait">📱 Tegak</button>
+      <button class="ori-btn" data-ori="landscape">📱 Miring</button>
+    </div>
+    </div>
 
   <!-- ============ LAYAR PREVIEW ============ -->
   <div class="screen" id="screen-preview">
@@ -236,7 +250,8 @@ var state = {
   alamat: '',
   fotoDataUrl: null,
   rawCanvas: null,
-  isPortrait: false
+  isPortrait: true,       // default: tegak
+  orientasiManual: 'portrait'  // pilihan user: 'portrait' atau 'landscape'
 };
 
 var BACKEND = 'https://script.google.com/macros/s/AKfycbwxlmttWUApbVOMFvNHmBcGhmKNwNfdTC4vx99HQuZGRCrMiHdrjSGBDxbvPZgIEKBF/exec';
@@ -545,6 +560,15 @@ function updatePeta(canvas, ctx, mapBase64, layout){
   mapImg.src = mapBase64;
 }
 
+// ============ ORIENTASI MANUAL ============
+$('camera-orientasi').addEventListener('click', function(e){
+  var b = e.target.closest('button');
+  if(!b) return;
+  state.orientasiManual = b.getAttribute('data-ori');
+  var btns = this.querySelectorAll('button');
+  for (var i=0;i<btns.length;i++) btns[i].classList.toggle('sel', btns[i]===b);
+});
+
 // ============ AMBIL FOTO ============
 async function ambilFoto(){
   var video = $('video');
@@ -553,58 +577,12 @@ async function ambilFoto(){
   var srcW = video.videoWidth;
   var srcH = video.videoHeight;
 
-  // Deteksi orientasi dari GRAVITASI (accelerometer) — paling akurat di semua HP
-  // HP tegak: gravitasi dominan di sumbu Y. HP miring: gravitasi dominan di sumbu X.
-  var landscape = false;
-  try {
-    if (window.DeviceOrientationEvent) {
-      // minta izin iOS 13+
-      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-        DeviceOrientationEvent.requestPermission().catch(function(){});
-      }
-    }
-  } catch(e){}
-
-  // baca gravitasi sekarang
-  var gravX = 0, gravY = 0;
-  try {
-    if (window.DeviceMotionEvent) {
-      // kita tidak bisa await event, jadi pakai nilai terakhir yang tersimpan
-      // fallback: pakai dimensi layar + video
-    }
-  } catch(e){}
-
-  // Karena accelerometer butuh event listener, kita pakai pendekatan berbeda:
-  // Deteksi dari RASIO video + keinginan user
-  // Video 1080x1920 = portrait. Kalau user miringkan HP, kita ROTASI jadi landscape.
-  // Cara paling sederhana & pasti: TANYA user lewat tombol sebelum foto.
-
-  // SEMENTARA: pakai rasio video sebagai petunjuk awal
-  // Video portrait (tinggi > lebar) = sensor kamera menghadap depan/belakang normal
-  // Kita asumsikan: kalau video portrait, user sedang pegang HP tegak
-  // Tapi user bilang dia miringkan HP... jadi ini salah.
-
-  // SOLUSI FINAL: pakai lebar layar vs tinggi layar saat tombol ditekan
-  // Ini berubah saat HP diputar, meski screen.orientation tidak
-  var layarLandscape = window.innerWidth > window.innerHeight;
-
-  // Tapi kalau keyboard/browser UI membuat innerWidth tetap portrait...
-  // Kita coba matchMedia yang lebih andal
-  var mqLandscape = false;
-  try {
-    mqLandscape = window.matchMedia('(orientation: landscape)').matches;
-  } catch(e){}
-
-  // Gabungkan beberapa sumber
-  landscape = layarLandscape || mqLandscape;
-
-  // Kalau masih ragu, tanya user lewat confirm (untuk debug)
-  // landscape = confirm('Apakah HP sedang miring (landscape)?\nOK = Landscape, Batal = Portrait');
-
+  // Deteksi orientasi dari PILIHAN USER (paling pasti, tidak tergantung sensor HP)
+  var landscape = (state.orientasiManual === 'landscape');
   state.isPortrait = !landscape;
 
-  // debug nilai mentah
-  console.log('DEBUG layarLandscape:', layarLandscape, 'mqLandscape:', mqLandscape, 'video:', srcW, 'x', srcH);
+  // debug
+  console.log('DEBUG orientasiManual:', state.orientasiManual, 'landscape:', landscape, 'video:', srcW, 'x', srcH);
 
   var canvas = document.createElement('canvas');
   var ctx = canvas.getContext('2d');
@@ -666,7 +644,7 @@ async function ambilFoto(){
 
   // debug: tampilkan dimensi & orientasi yang terdeteksi + versi
   var orientasiTeks = landscape ? 'LANDSCAPE' : 'PORTRAIT';
-  $('preview-sub').textContent = 'v12 · layar ' + (layarLandscape?'L':'P') + ' mq ' + (mqLandscape?'L':'P') + ' · video ' + srcW + 'x' + srcH + ' · canvas ' + canvas.width + 'x' + canvas.height + ' · ' + orientasiTeks;
+  $('preview-sub').textContent = 'v13 · pilih ' + state.orientasiManual + ' · video ' + srcW + 'x' + srcH + ' · canvas ' + canvas.width + 'x' + canvas.height + ' · ' + orientasiTeks;
 
   // 1. TUNGGU alamat + peta dari backend dulu (maks 10 detik)
   var resp = null;
