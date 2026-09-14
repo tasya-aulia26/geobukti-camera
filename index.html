@@ -208,7 +208,7 @@
       <div class="logo">✅</div>
       <div>
         <h1>Periksa Foto</h1>
-        <p id="preview-sub">Watermark sedang dipasang…</p>
+        <p id="preview-sub">Memuat alamat & peta…</p>
       </div>
     </div>
     <div class="card">
@@ -409,26 +409,6 @@ function potongTeks(ctx, text, maxWidth){
   return t + '…';
 }
 
-function gambarPeta(ctx, mapImg, x, y, size){
-  var r = size * 0.12;
-  if (!mapImg) {
-    ctx.fillStyle = 'rgba(255,255,255,0.18)';
-    roundedRect(ctx, x, y, size, size, r);
-    ctx.fill();
-  } else {
-    ctx.save();
-    roundedRect(ctx, x, y, size, size, r);
-    ctx.clip();
-    ctx.drawImage(mapImg, x, y, size, size);
-    ctx.restore();
-  }
-  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-  ctx.lineWidth = Math.max(2, size * 0.03);
-  roundedRect(ctx, x, y, size, size, r);
-  ctx.stroke();
-}
-
-// Potong teks jadi beberapa baris (wrap), maks maxBaris baris
 function bungkusTeks(ctx, text, maxW, maxBaris){
   var hasil = [];
   if (!text) return hasil;
@@ -446,6 +426,25 @@ function bungkusTeks(ctx, text, maxW, maxBaris){
   }
   if (hasil.length < maxBaris && baris) hasil.push(baris);
   return hasil;
+}
+
+function gambarPeta(ctx, mapImg, x, y, size){
+  var r = size * 0.12;
+  if (!mapImg) {
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    roundedRect(ctx, x, y, size, size, r);
+    ctx.fill();
+  } else {
+    ctx.save();
+    roundedRect(ctx, x, y, size, size, r);
+    ctx.clip();
+    ctx.drawImage(mapImg, x, y, size, size);
+    ctx.restore();
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = Math.max(2, size * 0.03);
+  roundedRect(ctx, x, y, size, size, r);
+  ctx.stroke();
 }
 
 // Gambar watermark teks (cepat, tanpa tunggu backend)
@@ -602,7 +601,7 @@ async function ambilFoto(){
   // tampilkan loading singkat
   $('preview-loading').style.display = 'block';
   $('preview-img').style.display = 'none';
-  $('preview-sub').textContent = 'Memasang watermark…';
+  $('preview-sub').textContent = 'Memuat alamat & peta…';
   $('btn-ulang').disabled = true;
   $('btn-gunakan').disabled = true;
 
@@ -612,35 +611,33 @@ async function ambilFoto(){
   var orientasiTeks = state.isPortrait ? 'PORTRAIT' : 'LANDSCAPE';
   $('preview-sub').textContent = 'Foto ' + canvas.width + 'x' + canvas.height + ' · ' + orientasiTeks;
 
-  // 1. Gambar watermark teks DULU (cepat, tanpa tunggu backend)
+  // 1. TUNGGU alamat + peta dari backend dulu (maks 10 detik)
+  var resp = null;
+  try {
+    resp = await Promise.race([
+      panggilBackend('watermark', { lat: state.lat, lng: state.lng }),
+      new Promise(function(_, rej){ setTimeout(function(){ rej(new Error('timeout')); }, 10000); })
+    ]);
+  } catch(e) {
+    resp = null;
+  }
+
+  if (resp && resp.alamat) state.alamat = resp.alamat;
+
+  // 2. Gambar watermark SEKALIGUS (teks + peta)
   var layout = gambarWatermarkTeks(canvas, ctx, state.alamat, wkt);
+  if (resp && resp.mapBase64) {
+    var mapImg = await muatGambar(resp.mapBase64);
+    if (mapImg) gambarPeta(ctx, mapImg, layout.mapX, layout.mapY, layout.mapSize);
+  }
+
   state.fotoDataUrl = canvas.toDataURL('image/jpeg', 0.92);
   $('preview-img').src = state.fotoDataUrl;
   $('preview-img').style.display = 'block';
   $('preview-loading').style.display = 'none';
   $('btn-ulang').disabled = false;
   $('btn-gunakan').disabled = false;
-  $('preview-sub').textContent = 'Memuat peta…';
-
-  // 2. Ambil alamat + peta dari backend (background, TIDAK blokir)
-  panggilBackend('watermark', { lat: state.lat, lng: state.lng })
-    .then(function(resp){
-      if (resp && resp.alamat) {
-        state.alamat = resp.alamat;
-        // redraw dari frame asli (tanpa watermark) supaya bersih
-        ctx.drawImage(state.rawCanvas, 0, 0);
-        layout = gambarWatermarkTeks(canvas, ctx, state.alamat, wkt);
-        state.fotoDataUrl = canvas.toDataURL('image/jpeg', 0.92);
-        $('preview-img').src = state.fotoDataUrl;
-      }
-      if (resp && resp.mapBase64) {
-        updatePeta(canvas, ctx, resp.mapBase64, layout);
-      }
-      $('preview-sub').textContent = 'Selesai';
-    })
-    .catch(function(){
-      $('preview-sub').textContent = 'Peta gagal dimuat';
-    });
+  $('preview-sub').textContent = 'Selesai';
 }
 
 // ============ EVENT ============
