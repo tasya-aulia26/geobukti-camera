@@ -543,52 +543,27 @@ function updatePeta(canvas, ctx, mapBase64, layout){
 }
 
 // ============ AMBIL FOTO ============
-// Deteksi orientasi yang lebih andal dari screen.orientation
-function deteksiLandscape(){
-  // 1. screen.orientation (paling akurat di HP modern)
-  try {
-    if (window.screen && screen.orientation && screen.orientation.type) {
-      var t = screen.orientation.type;
-      if (t.indexOf('landscape') === 0) return true;   // landscape-primary / landscape-secondary
-      if (t.indexOf('portrait') === 0) return false;   // portrait-primary / portrait-secondary
-    }
-  } catch(e){}
-  // 2. window.orientation (Android lama): 90 atau -90 = landscape
-  if (typeof window.orientation === 'number') {
-    return Math.abs(window.orientation) === 90;
-  }
-  // 3. fallback dimensi layar
-  return window.innerWidth > window.innerHeight;
-}
-
 async function ambilFoto(){
   var video = $('video');
   if (!video.videoWidth) return;
 
   var srcW = video.videoWidth;
   var srcH = video.videoHeight;
-  var landscape = deteksiLandscape();
+
+  // Deteksi orientasi dari DIMENSI VIDEO KAMERA (paling akurat, langsung dari sensor)
+  // Kamera belakang HP: landscape = video lebar (1920x1080), portrait = video tinggi
+  var landscape = (srcW >= srcH);
   state.isPortrait = !landscape;
 
   var canvas = document.createElement('canvas');
   var ctx = canvas.getContext('2d');
 
-  if (state.isPortrait && srcW > srcH) {
-    // HP tegak: crop tengah jadi 9:16
-    var outW = 1080, outH = 1920;
-    var cropW = srcH * 9 / 16;
-    var cropH = srcH;
-    var sx = (srcW - cropW) / 2;
-    canvas.width = outW;
-    canvas.height = outH;
-    ctx.drawImage(video, sx, 0, cropW, cropH, 0, 0, outW, outH);
-  } else {
-    // HP miring: pakai frame penuh
-    canvas.width = srcW;
-    canvas.height = srcH;
-    ctx.drawImage(video, 0, 0, srcW, srcH);
-  }
-  // simpan frame asli (tanpa watermark) ke canvas terpisah untuk redraw bersih
+  // Pakai frame penuh sesuai orientasi video — TIDAK di-crop
+  canvas.width = srcW;
+  canvas.height = srcH;
+  ctx.drawImage(video, 0, 0, srcW, srcH);
+
+  // simpan frame asli (tanpa watermark) untuk redraw bersih
   var rawCanvas = document.createElement('canvas');
   rawCanvas.width = canvas.width;
   rawCanvas.height = canvas.height;
