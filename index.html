@@ -537,13 +537,32 @@ function updatePeta(canvas, ctx, mapBase64, layout){
 }
 
 // ============ AMBIL FOTO ============
+// Deteksi orientasi yang lebih andal dari screen.orientation
+function deteksiLandscape(){
+  // 1. screen.orientation (paling akurat di HP modern)
+  try {
+    if (window.screen && screen.orientation && screen.orientation.type) {
+      var t = screen.orientation.type;
+      if (t.indexOf('landscape') === 0) return true;   // landscape-primary / landscape-secondary
+      if (t.indexOf('portrait') === 0) return false;   // portrait-primary / portrait-secondary
+    }
+  } catch(e){}
+  // 2. window.orientation (Android lama): 90 atau -90 = landscape
+  if (typeof window.orientation === 'number') {
+    return Math.abs(window.orientation) === 90;
+  }
+  // 3. fallback dimensi layar
+  return window.innerWidth > window.innerHeight;
+}
+
 async function ambilFoto(){
   var video = $('video');
   if (!video.videoWidth) return;
 
   var srcW = video.videoWidth;
   var srcH = video.videoHeight;
-  state.isPortrait = (window.innerHeight > window.innerWidth);
+  var landscape = deteksiLandscape();
+  state.isPortrait = !landscape;
 
   var canvas = document.createElement('canvas');
   var ctx = canvas.getContext('2d');
@@ -576,6 +595,10 @@ async function ambilFoto(){
   $('btn-gunakan').disabled = true;
 
   var wkt = dapatkanWaktu();
+
+  // debug: tampilkan dimensi & orientasi yang terdeteksi
+  var orientasiTeks = state.isPortrait ? 'PORTRAIT' : 'LANDSCAPE';
+  $('preview-sub').textContent = 'Foto ' + canvas.width + 'x' + canvas.height + ' · ' + orientasiTeks;
 
   // 1. Gambar watermark teks DULU (cepat, tanpa tunggu backend)
   var layout = gambarWatermarkTeks(canvas, ctx, state.alamat, wkt);
