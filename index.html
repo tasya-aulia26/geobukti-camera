@@ -188,7 +188,7 @@
     </div>
 
     <button class="btn" id="btn-buka-kamera" disabled> Buka Kamera</button>
-    <div class="footer">GeoBukti Camera v9</div>
+    <div class="footer">GeoBukti Camera v10</div>
   </div>
 
   <!-- ============ LAYAR KAMERA ============ -->
@@ -555,8 +555,11 @@ async function ambilFoto(){
 
   // Deteksi orientasi dari DIMENSI VIDEO KAMERA (paling akurat, langsung dari sensor)
   // Kamera belakang HP: landscape = video lebar (1920x1080), portrait = video tinggi
-  var landscape = (srcW >= srcH);
+  var landscape = srcW > srcH;  // pakai > bukan >= supaya lebih eksplisit
   state.isPortrait = !landscape;
+
+  // debug nilai mentah
+  console.log('DEBUG video:', srcW, 'x', srcH, 'landscape:', landscape);
 
   var canvas = document.createElement('canvas');
   var ctx = canvas.getContext('2d');
@@ -586,8 +589,8 @@ async function ambilFoto(){
   var wkt = dapatkanWaktu();
 
   // debug: tampilkan dimensi & orientasi yang terdeteksi + versi
-  var orientasiTeks = state.isPortrait ? 'PORTRAIT' : 'LANDSCAPE';
-  $('preview-sub').textContent = 'v9 · Foto ' + canvas.width + 'x' + canvas.height + ' · ' + orientasiTeks;
+  var orientasiTeks = landscape ? 'LANDSCAPE' : 'PORTRAIT';
+  $('preview-sub').textContent = 'v10 · video ' + srcW + 'x' + srcH + ' · canvas ' + canvas.width + 'x' + canvas.height + ' · ' + orientasiTeks;
 
   // 1. TUNGGU alamat + peta dari backend dulu (maks 10 detik)
   var resp = null;
