@@ -188,7 +188,7 @@
     </div>
 
     <button class="btn" id="btn-buka-kamera" disabled> Buka Kamera</button>
-    <div class="footer">GeoBukti Camera v11</div>
+    <div class="footer">GeoBukti Camera v12</div>
   </div>
 
   <!-- ============ LAYAR KAMERA ============ -->
@@ -553,21 +553,58 @@ async function ambilFoto(){
   var srcW = video.videoWidth;
   var srcH = video.videoHeight;
 
-  // Deteksi orientasi dari POSISI FISIK HP via screen.orientation.angle
-  // angle 0 atau 180 = HP tegak (portrait), 90 atau 270 = HP miring (landscape)
-  var angle = 0;
+  // Deteksi orientasi dari GRAVITASI (accelerometer) — paling akurat di semua HP
+  // HP tegak: gravitasi dominan di sumbu Y. HP miring: gravitasi dominan di sumbu X.
+  var landscape = false;
   try {
-    if (window.screen && screen.orientation && typeof screen.orientation.angle === 'number') {
-      angle = screen.orientation.angle;
-    } else if (typeof window.orientation === 'number') {
-      angle = window.orientation;
+    if (window.DeviceOrientationEvent) {
+      // minta izin iOS 13+
+      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission().catch(function(){});
+      }
     }
   } catch(e){}
-  var landscape = (Math.abs(angle) === 90 || Math.abs(angle) === 270);
+
+  // baca gravitasi sekarang
+  var gravX = 0, gravY = 0;
+  try {
+    if (window.DeviceMotionEvent) {
+      // kita tidak bisa await event, jadi pakai nilai terakhir yang tersimpan
+      // fallback: pakai dimensi layar + video
+    }
+  } catch(e){}
+
+  // Karena accelerometer butuh event listener, kita pakai pendekatan berbeda:
+  // Deteksi dari RASIO video + keinginan user
+  // Video 1080x1920 = portrait. Kalau user miringkan HP, kita ROTASI jadi landscape.
+  // Cara paling sederhana & pasti: TANYA user lewat tombol sebelum foto.
+
+  // SEMENTARA: pakai rasio video sebagai petunjuk awal
+  // Video portrait (tinggi > lebar) = sensor kamera menghadap depan/belakang normal
+  // Kita asumsikan: kalau video portrait, user sedang pegang HP tegak
+  // Tapi user bilang dia miringkan HP... jadi ini salah.
+
+  // SOLUSI FINAL: pakai lebar layar vs tinggi layar saat tombol ditekan
+  // Ini berubah saat HP diputar, meski screen.orientation tidak
+  var layarLandscape = window.innerWidth > window.innerHeight;
+
+  // Tapi kalau keyboard/browser UI membuat innerWidth tetap portrait...
+  // Kita coba matchMedia yang lebih andal
+  var mqLandscape = false;
+  try {
+    mqLandscape = window.matchMedia('(orientation: landscape)').matches;
+  } catch(e){}
+
+  // Gabungkan beberapa sumber
+  landscape = layarLandscape || mqLandscape;
+
+  // Kalau masih ragu, tanya user lewat confirm (untuk debug)
+  // landscape = confirm('Apakah HP sedang miring (landscape)?\nOK = Landscape, Batal = Portrait');
+
   state.isPortrait = !landscape;
 
   // debug nilai mentah
-  console.log('DEBUG angle:', angle, 'landscape:', landscape, 'video:', srcW, 'x', srcH);
+  console.log('DEBUG layarLandscape:', layarLandscape, 'mqLandscape:', mqLandscape, 'video:', srcW, 'x', srcH);
 
   var canvas = document.createElement('canvas');
   var ctx = canvas.getContext('2d');
@@ -629,7 +666,7 @@ async function ambilFoto(){
 
   // debug: tampilkan dimensi & orientasi yang terdeteksi + versi
   var orientasiTeks = landscape ? 'LANDSCAPE' : 'PORTRAIT';
-  $('preview-sub').textContent = 'v11 · angle ' + angle + '° · video ' + srcW + 'x' + srcH + ' · canvas ' + canvas.width + 'x' + canvas.height + ' · ' + orientasiTeks;
+  $('preview-sub').textContent = 'v12 · layar ' + (layarLandscape?'L':'P') + ' mq ' + (mqLandscape?'L':'P') + ' · video ' + srcW + 'x' + srcH + ' · canvas ' + canvas.width + 'x' + canvas.height + ' · ' + orientasiTeks;
 
   // 1. TUNGGU alamat + peta dari backend dulu (maks 10 detik)
   var resp = null;
