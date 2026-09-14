@@ -428,6 +428,26 @@ function gambarPeta(ctx, mapImg, x, y, size){
   ctx.stroke();
 }
 
+// Potong teks jadi beberapa baris (wrap), maks maxBaris baris
+function bungkusTeks(ctx, text, maxW, maxBaris){
+  var hasil = [];
+  if (!text) return hasil;
+  var kata = text.split(' ');
+  var baris = '';
+  for (var i = 0; i < kata.length; i++) {
+    var uji = baris ? baris + ' ' + kata[i] : kata[i];
+    if (ctx.measureText(uji).width > maxW && baris) {
+      hasil.push(baris);
+      baris = kata[i];
+      if (hasil.length >= maxBaris) break;
+    } else {
+      baris = uji;
+    }
+  }
+  if (hasil.length < maxBaris && baris) hasil.push(baris);
+  return hasil;
+}
+
 // Gambar watermark teks (cepat, tanpa tunggu backend)
 // Return layout untuk update peta nanti
 function gambarWatermarkTeks(canvas, ctx, alamat, wkt){
@@ -451,15 +471,28 @@ function gambarWatermarkTeks(canvas, ctx, alamat, wkt){
     lineH     = Math.round(S * 0.055);
   }
 
-  var textH = fontAddr + lineH * 3;
-  var barH = Math.max(mapSize, textH) + pad * 2;
-
   var lat = (typeof state.lat === 'number') ? state.lat.toFixed(5) : '--';
   var lng = (typeof state.lng === 'number') ? state.lng.toFixed(5) : '--';
   var akurasi = (state.akurasi != null) ? state.akurasi : '--';
-  var baris1 = (alamat && alamat.trim()) ? ('📍 ' + alamat.trim()) : '📍 Alamat tidak tersedia';
+  var alamatAsli = (alamat && alamat.trim()) ? alamat.trim() : '';
+  var baris1 = alamatAsli ? ('📍 ' + alamatAsli) : ('📍 ' + lat + ', ' + lng);
   var baris2 = '📅 ' + wkt.tanggal + '  ·  ⏰ ' + wkt.jam;
   var baris3 = '📍 ' + lat + ', ' + lng + '  ·  ±' + akurasi + ' m';
+
+  var font = '-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif';
+
+  var mapX = pad;
+  var textX = mapX + mapSize + gap;
+  var maxW = W - pad - textX;
+
+  // Hitung dulu jumlah baris alamat (wrap maks 2 baris)
+  ctx.font = '600 ' + fontAddr + 'px ' + font;
+  var addrLines = bungkusTeks(ctx, baris1, maxW, 2);
+
+  // Tinggi bar mengikuti jumlah baris alamat + 2 baris info
+  var totalBaris = addrLines.length + 2;
+  var barH = Math.max(mapSize, totalBaris * lineH + fontAddr) + pad * 2;
+  var mapY = H - barH + pad;
 
   // gradient gelap di bawah — SELALU di bawah, bukan di kanan
   var grd = ctx.createLinearGradient(0, H - barH, 0, H);
@@ -468,11 +501,6 @@ function gambarWatermarkTeks(canvas, ctx, alamat, wkt){
   grd.addColorStop(1, 'rgba(0,0,0,0.80)');
   ctx.fillStyle = grd;
   ctx.fillRect(0, H - barH, W, barH);
-
-  var font = '-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif';
-
-  var mapX = pad;
-  var mapY = H - barH + pad;
 
   // placeholder peta (kotak kosong dulu)
   ctx.fillStyle = 'rgba(255,255,255,0.18)';
@@ -483,43 +511,22 @@ function gambarWatermarkTeks(canvas, ctx, alamat, wkt){
   roundedRect(ctx, mapX, mapY, mapSize, mapSize, mapSize * 0.12);
   ctx.stroke();
 
-  var textX = mapX + mapSize + gap;
-  var maxW = W - pad - textX;
-
   ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '600 ' + fontAddr + 'px ' + font;
-
   var lineY = H - barH + pad + fontAddr + Math.round(fontAddr * 0.25);
 
-  if (landscape) {
-    ctx.fillText(potongTeks(ctx, baris1, maxW), textX, lineY);
-    ctx.fillStyle = '#e6e6e6';
-    ctx.font = '400 ' + fontSmall + 'px ' + font;
-    ctx.fillText(baris2, textX, lineY + lineH);
-    ctx.fillText(baris3, textX, lineY + lineH*2);
-  } else {
-    // portrait: alamat wrap maks 2 baris
-    var words = baris1.split(' ');
-    var line = '', n = 0;
-    for (var i = 0; i < words.length; i++) {
-      var test = line ? line + ' ' + words[i] : words[i];
-      if (ctx.measureText(test).width > maxW && line) {
-        ctx.fillText(line, textX, lineY + lineH*n);
-        n++;
-        line = words[i];
-        if (n >= 2) break;
-      } else {
-        line = test;
-      }
-    }
-    if (n < 2 && line) { ctx.fillText(line, textX, lineY + lineH*n); n++; }
-
-    ctx.fillStyle = '#e6e6e6';
-    ctx.font = '400 ' + fontSmall + 'px ' + font;
-    ctx.fillText(baris2, textX, lineY + lineH*n + Math.round(fontSmall*0.3));
-    ctx.fillText(baris3, textX, lineY + lineH*(n+1) + Math.round(fontSmall*0.3));
+  // alamat (wrap) — sama untuk landscape & portrait
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '600 ' + fontAddr + 'px ' + font;
+  for (var i = 0; i < addrLines.length; i++) {
+    ctx.fillText(addrLines[i], textX, lineY + lineH * i);
   }
+
+  // tanggal + koordinat
+  var yInfo = lineY + lineH * addrLines.length;
+  ctx.fillStyle = '#e6e6e6';
+  ctx.font = '400 ' + fontSmall + 'px ' + font;
+  ctx.fillText(baris2, textX, yInfo);
+  ctx.fillText(baris3, textX, yInfo + lineH);
 
   return { mapX: mapX, mapY: mapY, mapSize: mapSize, barH: barH, pad: pad };
 }
@@ -582,7 +589,12 @@ async function ambilFoto(){
     canvas.height = srcH;
     ctx.drawImage(video, 0, 0, srcW, srcH);
   }
-  state.rawCanvas = canvas;
+  // simpan frame asli (tanpa watermark) ke canvas terpisah untuk redraw bersih
+  var rawCanvas = document.createElement('canvas');
+  rawCanvas.width = canvas.width;
+  rawCanvas.height = canvas.height;
+  rawCanvas.getContext('2d').drawImage(canvas, 0, 0);
+  state.rawCanvas = rawCanvas;
 
   stopKamera();
   showScreen('screen-preview');
@@ -615,8 +627,8 @@ async function ambilFoto(){
     .then(function(resp){
       if (resp && resp.alamat) {
         state.alamat = resp.alamat;
-        // redraw teks dengan alamat baru
-        ctx.clearRect(0, canvas.height - layout.barH, canvas.width, layout.barH);
+        // redraw dari frame asli (tanpa watermark) supaya bersih
+        ctx.drawImage(state.rawCanvas, 0, 0);
         layout = gambarWatermarkTeks(canvas, ctx, state.alamat, wkt);
         state.fotoDataUrl = canvas.toDataURL('image/jpeg', 0.92);
         $('preview-img').src = state.fotoDataUrl;
