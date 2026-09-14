@@ -201,7 +201,7 @@
     </div>
 
     <button class="btn" id="btn-buka-kamera" disabled> Buka Kamera</button>
-    <div class="footer">GeoBukti Camera v17</div>
+    <div class="footer">GeoBukti Camera v18</div>
   </div>
 
   <!-- ============ LAYAR KAMERA ============ -->
@@ -254,7 +254,7 @@ var state = {
   alamat: '',
   fotoDataUrl: null,
   rawCanvas: null,
-  mapBase64: null,
+  mapTile: null,       // tile peta OSM yang sudah dimuat (untuk watermark)
   wkt: null,
   isPortrait: true,       // default: tegak
   orientasiManual: 'portrait'  // pilihan user: 'portrait' atau 'landscape'
@@ -554,18 +554,6 @@ function gambarWatermarkTeks(canvas, ctx, alamat, wkt){
   return { mapX: mapX, mapY: mapY, mapSize: mapSize, barH: barH, pad: pad };
 }
 
-// Update peta setelah backend merespons (tanpa blokir)
-function updatePeta(canvas, ctx, mapBase64, layout){
-  var mapImg = new Image();
-  mapImg.onload = function(){
-    gambarPeta(ctx, mapImg, layout.mapX, layout.mapY, layout.mapSize);
-    state.fotoDataUrl = canvas.toDataURL('image/jpeg', 0.92);
-    $('preview-img').src = state.fotoDataUrl;
-  };
-  mapImg.onerror = function(){ /* biarkan kotak kosong */ };
-  mapImg.src = mapBase64;
-}
-
 // ============ ORIENTASI MANUAL ============
 $('camera-orientasi').addEventListener('click', function(e){
   var b = e.target.closest('button');
@@ -575,19 +563,68 @@ $('camera-orientasi').addEventListener('click', function(e){
   for (var i=0;i<btns.length;i++) btns[i].classList.toggle('sel', btns[i]===b);
 });
 
-// Terapkan watermark ke canvas (raw + teks + peta)
+// Hitung koordinat tile OSM dari lat/lng
+function latLngKeTile(lat, lng, zoom){
+  var n = Math.pow(2, zoom);
+  var x = (lng + 180) / 360 * n;
+  var latRad = lat * Math.PI / 180;
+  var y = (1 - Math.log(Math.tan(latRad) + 1/Math.cos(latRad)) / Math.PI) / 2 * n;
+  return { x: x, y: y };
+}
+
+// Muat tile peta OSM untuk lokasi (crossOrigin supaya bisa digambar ke canvas)
+function muatTile(lat, lng){
+  if (lat == null || lng == null) return Promise.resolve(null);
+  var zoom = 16;
+  var t = latLngKeTile(lat, lng, zoom);
+  var tx = Math.floor(t.x), ty = Math.floor(t.y);
+  var fx = t.x - tx, fy = t.y - ty;  // posisi titik dalam tile (0..1)
+  var url = 'https://tile.openstreetmap.org/' + zoom + '/' + tx + '/' + ty + '.png';
+  return new Promise(function(resolve){
+    var img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function(){ resolve({ img: img, fx: fx, fy: fy }); };
+    img.onerror = function(){ resolve(null); };
+    img.src = url;
+  });
+}
+
+// Gambar titik lokasi (penanda merah)
+function gambarTitikLokasi(ctx, mapX, mapY, size){
+  var cx = mapX + size/2, cy = mapY + size/2;
+  var r = Math.max(3, size * 0.07);
+  ctx.fillStyle = '#e53935';
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, 2*Math.PI);
+  ctx.fill();
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = Math.max(1.5, size * 0.03);
+  ctx.stroke();
+}
+
+// Gambar mini peta dari tile OSM (lokasi tepat di tengah)
+function gambarPetaDariTile(ctx, tileImg, fx, fy, mapX, mapY, size){
+  var drawX = mapX + size/2 - fx * size;
+  var drawY = mapY + size/2 - fy * size;
+  ctx.save();
+  roundedRect(ctx, mapX, mapY, size, size, size * 0.12);
+  ctx.clip();
+  ctx.drawImage(tileImg, drawX, drawY, size, size);
+  ctx.restore();
+  gambarTitikLokasi(ctx, mapX, mapY, size);
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = Math.max(2, size * 0.03);
+  roundedRect(ctx, mapX, mapY, size, size, size * 0.12);
+  ctx.stroke();
+}
+
+// Terapkan watermark ke canvas (raw + teks + peta OSM)
 function renderWatermark(canvas){
   var ctx = canvas.getContext('2d');
   ctx.drawImage(state.rawCanvas, 0, 0);
   var layout = gambarWatermarkTeks(canvas, ctx, state.alamat, state.wkt);
-  if (state.mapBase64) {
-    var mi = new Image();
-    mi.onload = function(){
-      gambarPeta(ctx, mi, layout.mapX, layout.mapY, layout.mapSize);
-      state.fotoDataUrl = canvas.toDataURL('image/jpeg', 0.92);
-      $('preview-img').src = state.fotoDataUrl;
-    };
-    mi.src = state.mapBase64;
+  if (state.mapTile) {
+    gambarPetaDariTile(ctx, state.mapTile.img, state.mapTile.fx, state.mapTile.fy, layout.mapX, layout.mapY, layout.mapSize);
   }
   state.fotoDataUrl = canvas.toDataURL('image/jpeg', 0.92);
   $('preview-img').src = state.fotoDataUrl;
@@ -691,7 +728,7 @@ async function ambilFoto(){
 
   // debug: tampilkan dimensi & orientasi yang terdeteksi + versi
   var orientasiTeks = landscape ? 'LANDSCAPE' : 'PORTRAIT';
-  $('preview-sub').textContent = 'v16 · pilih ' + state.orientasiManual + ' · ' + orientasiTeks + ' · (terbalik? tekan Putar)';
+  $('preview-sub').textContent = 'v18 · pilih ' + state.orientasiManual + ' · ' + orientasiTeks + ' · (terbalik? tekan Putar)';
 
   // 1. TUNGGU alamat + peta dari backend dulu (maks 10 detik)
   var resp = null;
@@ -705,8 +742,13 @@ async function ambilFoto(){
   }
 
   if (resp && resp.alamat) state.alamat = resp.alamat;
-  state.mapBase64 = (resp && resp.mapBase64) ? resp.mapBase64 : null;
   state.wkt = wkt;
+
+  // muat tile peta OSM (maks 5 detik)
+  state.mapTile = await Promise.race([
+    muatTile(state.lat, state.lng),
+    new Promise(function(res){ setTimeout(function(){ res(null); }, 5000); })
+  ]);
 
   // 2. Gambar watermark (raw + teks + peta)
   renderWatermark(canvas);
@@ -730,7 +772,7 @@ $('btn-ulang').addEventListener('click', function(){
   $('preview-img').src = '';
   state.fotoDataUrl = null;
   state.rawCanvas = null;
-  state.mapBase64 = null;
+  state.mapTile = null;
   state.wkt = null;
   bukaKamera();
 });
@@ -769,7 +811,7 @@ async function simpanFoto(){
       $('preview-img').src = '';
       state.fotoDataUrl = null;
       state.rawCanvas = null;
-      state.mapBase64 = null;
+      state.mapTile = null;
       state.wkt = null;
       showScreen('screen-main');
       btn.disabled = false;
